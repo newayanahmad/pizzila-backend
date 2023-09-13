@@ -43,7 +43,7 @@ async function isEmailTaken(email) {
 
 
 app.get("/", (req, res) => {
-    res.json({ "message": "Hello there!" })
+    res.json({ "message": "Hello world!" })
 })
 
 app.post("/api/register", async (req, res) => {
@@ -58,7 +58,7 @@ app.post("/api/register", async (req, res) => {
     let hashedOTP = await createHash(String(otp))
     const newUser = new User({ name: name.trim(), email: email.trim(), password: hashedPassword, otp: hashedOTP })
     await newUser.save()
-    sendOTP(email, otp)
+    await sendOTP(email, otp)
     res.json({ success: true })
 })
 
@@ -108,7 +108,7 @@ app.post("/api/login", async (req, res) => {
     if (isValid) {
         if (!user.isActive) {
             let otp = Math.floor(100000 + Math.random() * 900000)
-            sendOTP(email, otp)
+            await sendOTP(email, otp)
             let hashedOTP = await createHash(String(otp))
             res.json(({ success: true, verified: false }))
             let user = await User.updateOne({ email: email }, { "$set": { otp: hashedOTP } })

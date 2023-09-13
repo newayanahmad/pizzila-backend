@@ -1,5 +1,5 @@
 const nodemailer = require('nodemailer')
-const sendOTP = (to, otp) => {
+const sendOTP = async (to, otp) => {
     let transport = nodemailer.createTransport({
         service: 'gmail',
         auth: {
@@ -8,7 +8,7 @@ const sendOTP = (to, otp) => {
         },
     });
 
-    transport.sendMail({
+    await transport.sendMail({
         from: process.env.MAIL_USERNAME,
         to: to,
         subject: "Email verification",
