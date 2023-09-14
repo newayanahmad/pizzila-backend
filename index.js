@@ -1,6 +1,7 @@
 const express = require("express");
 const bodyParser = require("body-parser");
 const sendOTP = require("./sendOTP");
+const sendPasswordResetOTP = require("./sendResetPasswordOTP");
 const { config } = require("dotenv");
 const bcrypt = require('bcryptjs');
 const User = require("./models/User")
@@ -82,8 +83,10 @@ app.post("/api/verifyuser", async (req, res) => {
     const { token } = req.headers;
     try {
         let isTokenValid = jwt.verify(token, process.env.JWT_SECRET)
+        let id = jwt.decode(token, process.env.JWT_SECRET)
+        let user = await User.findOne({ "_id": id })
         if (isTokenValid) {
-            res.json({ userValid: true })
+            res.json({ userValid: true, userName: user.name })
         }
         else {
             res.json({ userValid: false })
@@ -120,6 +123,47 @@ app.post("/api/login", async (req, res) => {
     else {
         res.json({ success: false, message: 'Invalid credentials' })
     }
+})
+
+app.post("/api/sendotp", async (req, res) => {
+    const { email } = req.body
+    let user = await User.findOne({ email: email })
+    if (!user) {
+        res.json({ success: false, message: "User not found" })
+        return;
+    }
+    let otp = Math.floor(100000 + Math.random() * 900000)
+    const hashedOTP = await createHash(String(otp))
+    await User.updateOne({ email: email }, { "$set": { otp: hashedOTP } })
+    res.json({ success: true, message: "OTP has been send to your email" })
+    await sendPasswordResetOTP(email, otp, user.name.toString())
+})
+
+app.post("/api/verifyotp", async (req, res) => {
+    const { email, otp } = req.body;
+    const user = await User.findOne({ email: email });
+    let hashedOTP = user.otp
+    let isValid = await checkHash(otp, hashedOTP)
+    if (isValid) {
+        let user = await User.updateOne({ email: email }, { "$set": { isActive: true } })
+        res.json({ success: true })
+    }
+    else {
+        res.json({ success: false, message: 'Invalid OTP' })
+    }
+})
+
+app.post("/api/reset-password", async (req, res) => {
+    const { email, password } = req.body
+    let user = await User.findOne({ email: email })
+    if (!user) {
+        res.json({ success: false, message: "Something went wrong" })
+        return;
+    }
+    let hashedPassword = await createHash(password)
+    let updatedUser = await User.updateOne({ email: email }, { "$set": { password: hashedPassword } })
+    res.json({ success: true, message: "Your password has been successfully reset. \nPlease log in with your new password." })
+
 })
 
 
