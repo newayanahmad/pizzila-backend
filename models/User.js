@@ -7,6 +7,8 @@ const UserSchema = new Schema({
     password: String,
     otp: String,
     isActive: { type: Boolean, default: false },
+    isAdmin: { type: Boolean, default: false },
+    cartItems: { type: Array, default: [] },
     date: { type: Date, default: Date.now }
 })
 

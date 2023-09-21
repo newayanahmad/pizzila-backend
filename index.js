@@ -5,11 +5,15 @@ const sendPasswordResetOTP = require("./sendResetPasswordOTP");
 const { config } = require("dotenv");
 const bcrypt = require('bcryptjs');
 const User = require("./models/User")
+const Pizza = require("./models/Pizza")
+const Order = require("./models/Order")
 const mongoose = require('mongoose');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
 
+
 config()
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 // Create express app
 
 const app = express();
@@ -59,8 +63,8 @@ app.post("/api/register", async (req, res) => {
     let hashedOTP = await createHash(String(otp))
     const newUser = new User({ name: name.trim(), email: email.trim(), password: hashedPassword, otp: hashedOTP })
     await newUser.save()
-    await sendOTP(email, otp)
     res.json({ success: true })
+    await sendOTP(email, otp)
 })
 
 app.post("/api/verifyemail", async (req, res) => {
@@ -99,7 +103,7 @@ app.post("/api/verifyuser", async (req, res) => {
 
 
 app.post("/api/login", async (req, res) => {
-    const { email, password } = req.body;
+    const { email, password, isAdmin } = req.body;
     const user = await User.findOne({ email: email });
     if (!user) {
         res.json({ success: false, message: "Invalid credentials" })
@@ -109,12 +113,23 @@ app.post("/api/login", async (req, res) => {
     let userId = user._id.toString();
     let isValid = await checkHash(password, hashedPassword)
     if (isValid) {
+        if (isAdmin === true) {
+            if (user.isAdmin) {
+                let jwtToken = jwt.sign(userId, process.env.JWT_SECRET)
+                res.json({ success: true, token: jwtToken, verified: true })
+                return;
+            }
+            else {
+                res.json({ success: false, message: "Invalid credentials" })
+                return;
+            }
+        }
         if (!user.isActive) {
             let otp = Math.floor(100000 + Math.random() * 900000)
-            await sendOTP(email, otp)
             let hashedOTP = await createHash(String(otp))
             res.json(({ success: true, verified: false }))
-            let user = await User.updateOne({ email: email }, { "$set": { otp: hashedOTP } })
+            await User.updateOne({ email: email }, { "$set": { otp: hashedOTP } })
+            await sendOTP(email, otp)
             return;
         }
         let jwtToken = jwt.sign(userId, process.env.JWT_SECRET)
@@ -164,6 +179,77 @@ app.post("/api/reset-password", async (req, res) => {
     let updatedUser = await User.updateOne({ email: email }, { "$set": { password: hashedPassword } })
     res.json({ success: true, message: "Your password has been successfully reset. \nPlease log in with your new password." })
 
+})
+
+
+app.get("/api/getpizzas", async (req, res) => {
+    let pizzas = await Pizza.find({})
+    res.json(pizzas)
+})
+
+app.post("/api/add-to-cart", async (req, res) => {
+    const { cart } = req.body
+    const { token } = req.headers
+    const id = jwt.decode(token, process.env.JWT_SECRET)
+    const updatedUser = await User.updateOne({ _id: id }, { "$set": { cartItems: cart } })
+    res.json({ success: true })
+})
+
+app.post("/api/get-cart-items", async (req, res) => {
+    let { user } = req.headers;
+    let isTokenValid = jwt.verify(user.toString(), process.env.JWT_SECRET)
+    if (!isTokenValid) {
+        res.json({ success: false })
+        return;
+    }
+    let id = jwt.decode(user, process.env.JWT_SECRET)
+    let userData = await User.findOne({ _id: id })
+    res.json({ success: true, cartItems: userData.cartItems })
+})
+
+app.post("/api/place-order", async (req, res) => {
+    const { cart, subtotal, address } = req.body
+    const { user } = req.headers
+    const id = jwt.decode(user, process.env.JWT_SECRET)
+    console.log(id, cart, subtotal, address);
+    // storing the order details in order model
+    const newOrder = new Order({ userId: id, items: cart, address: address, orderStatus: "Order Placed", paymentStatus: "Pending", subtotal: subtotal })
+    await newOrder.save()
+    res.json({ success: true, orderId: newOrder._id.toString() })
+})
+
+app.post('/api/create-payment-intent', async (req, res) => {
+    const { items, subtotal } = req.body;
+    try {
+        const paymentIntent = await stripe.paymentIntents.create({
+            amount: parseInt(subtotal) * 100,
+            currency: "inr",
+
+        });
+        res.send({
+            clientSecret: paymentIntent.client_secret,
+        });
+    }
+    catch {
+        res.json({ success: false })
+    }
+
+});
+
+
+app.post('/api/check-payment-status', async (req, res) => {
+    const { intent, orderID } = req.body;
+    console.log(intent, orderID);
+    const paymentIntent = await stripe.paymentIntents.retrieve(
+        intent
+    );
+    if (paymentIntent.status === "succeeded") {
+        const newOrder = await Order.updateOne({ "_id": orderID }, { "$set": { paymentStatus: "Paid" } })
+    }
+    else {
+        await Order.updateOne({ "_id": orderID }, { "$set": { paymentStatus: "Failed" } })
+    }
+    res.json({ status: paymentIntent.status, success: true })
 })
 
 
