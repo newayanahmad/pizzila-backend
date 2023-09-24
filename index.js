@@ -140,6 +140,20 @@ app.post("/api/login", async (req, res) => {
     }
 })
 
+app.post("/api/resendotp", async (req, res) => {
+    const { email } = req.body
+    let user = await User.findOne({ email: email })
+    if (!user) {
+        res.json({ success: false, message: "User not found" })
+        return;
+    }
+    let otp = Math.floor(100000 + Math.random() * 900000)
+    const hashedOTP = await createHash(String(otp))
+    await User.updateOne({ email: email }, { "$set": { otp: hashedOTP } })
+    res.json({ success: true, message: "OTP has been send to your email" })
+    await sendOTP(email, otp)
+})
+
 app.post("/api/sendotp", async (req, res) => {
     const { email } = req.body
     let user = await User.findOne({ email: email })
