@@ -211,9 +211,8 @@ app.post("/api/place-order", async (req, res) => {
     const { cart, subtotal, address } = req.body
     const { user } = req.headers
     const id = jwt.decode(user, process.env.JWT_SECRET)
-    console.log(id, cart, subtotal, address);
     // storing the order details in order model
-    const newOrder = new Order({ userId: id, items: cart, address: address, orderStatus: "Order Placed", paymentStatus: "Pending", subtotal: subtotal })
+    const newOrder = new Order({ userId: id, items: cart, address: address, orderStatus: "Awaiting Payment", paymentStatus: "Pending", subtotal: subtotal })
     await newOrder.save()
     res.json({ success: true, orderId: newOrder._id.toString() })
 })
@@ -239,17 +238,40 @@ app.post('/api/create-payment-intent', async (req, res) => {
 
 app.post('/api/check-payment-status', async (req, res) => {
     const { intent, orderID } = req.body;
-    console.log(intent, orderID);
+    const { user } = req.headers
+    const id = jwt.decode(user, process.env.JWT_SECRET);
+    await User.updateOne({ _id: id }, { "$set": { cartItems: [] } })
     const paymentIntent = await stripe.paymentIntents.retrieve(
         intent
     );
     if (paymentIntent.status === "succeeded") {
-        const newOrder = await Order.updateOne({ "_id": orderID }, { "$set": { paymentStatus: "Paid" } })
+        const newOrder = await Order.updateOne({ "_id": orderID }, { "$set": { paymentStatus: "Paid", orderStatus: "Order Placed" } })
     }
     else {
         await Order.updateOne({ "_id": orderID }, { "$set": { paymentStatus: "Failed" } })
     }
     res.json({ status: paymentIntent.status, success: true })
+})
+
+app.post("/api/get-orders", async (req, res) => {
+    const { user } = req.headers
+    const { orderId } = req.body
+    const id = jwt.decode(user, process.env.JWT_SECRET)
+    if (orderId) {
+        const order = await Order.findOne({ _id: orderId, userId: id })
+        res.json({ success: true, order: order })
+        return;
+    }
+    const orders = await Order.find({ userId: id }).sort("-date")
+    res.json(orders)
+})
+
+
+app.post("/api/get-user", async (req, res) => {
+    const { user } = req.headers
+    const id = jwt.decode(user, process.env.JWT_SECRET)
+    const userData = await User.findOne({ _id: id })
+    res.json({ name: userData.name, email: userData.email, date: userData.date })
 })
 
 

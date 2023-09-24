@@ -9,7 +9,7 @@ const OrderSchema = new Schema({
     subtotal: Number,
     date: {
         type: Date,
-        default: Date.now()
+        default: Date.now
     }
 })
 
