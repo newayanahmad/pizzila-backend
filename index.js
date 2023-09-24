@@ -269,6 +269,10 @@ app.post('/api/check-payment-status', async (req, res) => {
 
 app.post("/api/get-orders", async (req, res) => {
     const { user } = req.headers
+    if (!user) {
+        res.json({ success: false })
+        return;
+    }
     const { orderId } = req.body
     const id = jwt.decode(user, process.env.JWT_SECRET)
     if (orderId) {
@@ -283,6 +287,10 @@ app.post("/api/get-orders", async (req, res) => {
 
 app.post("/api/get-user", async (req, res) => {
     const { user } = req.headers
+    if (!user) {
+        res.json({ success: false })
+        return;
+    }
     const id = jwt.decode(user, process.env.JWT_SECRET)
     const userData = await User.findOne({ _id: id })
     res.json({ name: userData.name, email: userData.email, date: userData.date })
