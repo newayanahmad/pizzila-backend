@@ -11,6 +11,7 @@ const Inventory = require("./models/Inventory")
 const mongoose = require('mongoose');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
+const notifyAdmin = require("./notifyAdmin");
 
 
 config()
@@ -277,6 +278,10 @@ app.post('/api/check-payment-status', async (req, res) => {
         await Order.updateOne({ "_id": orderID }, { "$set": { paymentStatus: "Failed" } })
     }
     res.json({ status: paymentIntent.status, success: true })
+    const inventory = await Inventory.find({ quantity: { "$lte": 20 } })
+    if (inventory.length > 0) {
+        await notifyAdmin(inventory)
+    }
 })
 app.post("/api/get-orders", async (req, res) => {
     const { user } = req.headers
