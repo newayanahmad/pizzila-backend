@@ -7,6 +7,7 @@ const bcrypt = require('bcryptjs');
 const User = require("./models/User")
 const Pizza = require("./models/Pizza")
 const Order = require("./models/Order")
+const Inventory = require("./models/Inventory")
 const mongoose = require('mongoose');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
@@ -259,14 +260,24 @@ app.post('/api/check-payment-status', async (req, res) => {
         intent
     );
     if (paymentIntent.status === "succeeded") {
-        const newOrder = await Order.updateOne({ "_id": orderID }, { "$set": { paymentStatus: "Paid", orderStatus: "Order Placed" } })
+        const order = await Order.findOne({ "_id": orderID }); // Retrieve the order
+        // Update the inventory
+        if (!order.inventoryUpdated) {
+            const newOrder = await Order.updateOne({ "_id": orderID }, { "$set": { paymentStatus: "Paid", orderStatus: "Order Placed", inventoryUpdated: true } })
+            order.items.forEach((item) => {
+                Object.keys(item.ingredients).forEach((key) => {
+                    item.ingredients[key].forEach(async (ingredient) => {
+                        await Inventory.findOneAndUpdate({ ingredient: ingredient }, { "$inc": { quantity: -item.quantity } });
+                    });
+                });
+            });
+        }
     }
     else {
         await Order.updateOne({ "_id": orderID }, { "$set": { paymentStatus: "Failed" } })
     }
     res.json({ status: paymentIntent.status, success: true })
 })
-
 app.post("/api/get-orders", async (req, res) => {
     const { user } = req.headers
     if (!user) {

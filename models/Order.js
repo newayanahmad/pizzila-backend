@@ -6,6 +6,7 @@ const OrderSchema = new Schema({
     address: { type: Object },
     orderStatus: String,
     paymentStatus: String,
+    inventoryUpdated: { type: Boolean, default: false }, // new field
     subtotal: Number,
     date: {
         type: Date,
