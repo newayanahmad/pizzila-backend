@@ -12,6 +12,7 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const notifyAdmin = require("./notifyAdmin");
+const sendOrderConfirmation = require("./sendOrderConfirmation");
 
 
 config()
@@ -273,16 +274,22 @@ app.post('/api/check-payment-status', async (req, res) => {
                 });
             });
         }
+        res.json({ status: paymentIntent.status, success: true })
+        // Send order confirmation email
+        const u = await User.findOne({ "_id": id })
+        await sendOrderConfirmation(u.email.toString(), order);
+        const inventory = await Inventory.find({ quantity: { "$lte": 20 } })
+        if (inventory.length > 0) {
+            await notifyAdmin(inventory)
+        }
     }
     else {
         await Order.updateOne({ "_id": orderID }, { "$set": { paymentStatus: "Failed" } })
-    }
-    res.json({ status: paymentIntent.status, success: true })
-    const inventory = await Inventory.find({ quantity: { "$lte": 20 } })
-    if (inventory.length > 0) {
-        await notifyAdmin(inventory)
+        res.json({ sucess: false })
+        return
     }
 })
+
 app.post("/api/get-orders", async (req, res) => {
     const { user } = req.headers
     if (!user) {
@@ -311,6 +318,64 @@ app.post("/api/get-user", async (req, res) => {
     const userData = await User.findOne({ _id: id })
     res.json({ name: userData.name, email: userData.email, date: userData.date })
 })
+
+
+app.post("/api/verifyadmin", async (req, res) => {
+    const { token } = req.headers
+    if (!token) {
+        res.json({ success: false })
+        return;
+    }
+    else {
+        try {
+            let isTokenValid = jwt.verify(token, process.env.JWT_SECRET)
+            let id = jwt.decode(token, process.env.JWT_SECRET)
+            let user = await User.findOne({ "_id": id })
+            if (isTokenValid) {
+                if (user.isAdmin) {
+                    res.json({ success: true })
+                    return;
+                }
+                else {
+                    res.json({ success: false })
+                    return;
+                }
+            }
+            else {
+                res.json({ success: false })
+                return;
+            }
+        }
+        catch {
+            res.json({ success: false })
+            return;
+        }
+    }
+})
+
+app.post("/api/get-inventory", async (req, res) => {
+    // fetch inventory from database
+    const inventory = await Inventory.find({});
+    res.json(inventory);
+})
+
+
+app.post("/api/getorders", async (req, res) => {
+    const { user } = req.headers
+    if (!user) {
+        res.json({ success: false })
+        return;
+    }
+    const id = jwt.decode(user, process.env.JWT_SECRET)
+    const u = await User.findOne({ "_id": id })
+    if (!u.isAdmin) {
+        res.json({ success: false })
+        return;
+    }
+    const orders = await Order.find({}).sort("-date")
+    res.json({ success: true, orders })
+})
+
 
 
 app.listen(PORT, '0.0.0.0', () => {
