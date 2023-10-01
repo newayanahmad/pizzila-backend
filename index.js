@@ -353,7 +353,7 @@ app.post("/api/get-orders", async (req, res) => {
     const { orderId } = req.body
     const id = jwt.decode(user, process.env.JWT_SECRET)
     if (orderId) {
-        const order = await Order.findOne({ _id: orderId, userId: id })
+        const order = await Order.findOne({ _id: orderId })
         const user = await User.findOne({ _id: id })
         res.json({ success: true, order: order, user: { name: user.name, email: user.email } })
         return;
