@@ -13,7 +13,8 @@ const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const notifyAdmin = require("./notifyAdmin");
 const sendOrderConfirmation = require("./sendOrderConfirmation");
-
+const http = require('http');
+const socketIo = require('socket.io');
 
 config()
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
@@ -28,10 +29,63 @@ app.use(bodyParser.urlencoded({ extended: true }));
 // Set port
 const PORT = process.env.PORT || 3000;
 
+// Create HTTP server
+const server = http.createServer(app);
+
+// Create Socket.IO instance attached to the HTTP server
+const io = socketIo(server, {
+    cors: {
+        origin: '*',
+        credentials: true, // If needed
+    },
+});
+
+// Handle new socket connections
+// Mapping of emails to arrays of socket connections
+const emailSockets = new Map();
+io.on('connection', async (socket) => {
+    const userId = socket.handshake.query.token;
+    const id = jwt.decode(userId, process.env.JWT_SECRET)
+    const user = await User.findOne({ "_id": id })
+    const email = user?.email.toString()
+    console.log("new user: ", email);
+    // If the email is already in the map, push the new socket to the array
+    // Otherwise, add a new array with the socket
+    if (emailSockets.has(email)) {
+        emailSockets.get(email).push(socket);
+    } else {
+        emailSockets.set(email, [socket]);
+    }
+
+    socket.on("demo", data => {
+        console.log(data);
+    })
+
+    socket.on('disconnect', async () => {
+        // Remove the socket from the array
+        const userId = socket.handshake.query.token;
+        const id = jwt.decode(userId, process.env.JWT_SECRET)
+        const user = await User.findOne({ "_id": id })
+        const email = user?.email.toString()
+        const sockets = emailSockets.get(email);
+        const index = sockets.indexOf(socket);
+        console.log(email, "disconnected");
+        if (index !== -1) {
+            sockets.splice(index, 1);
+        }
+
+        // If the array is empty, remove the email from the map
+        if (sockets.length === 0) {
+            emailSockets.delete(email);
+        }
+    });
+});
+
 
 async function main() {
     await mongoose.connect(process.env.MONGODB_CONNECTION_STRING);
 }
+
 main().catch(err => console.log(err));
 async function createHash(value) {
     const salt = await bcrypt.genSalt(10);
@@ -300,7 +354,8 @@ app.post("/api/get-orders", async (req, res) => {
     const id = jwt.decode(user, process.env.JWT_SECRET)
     if (orderId) {
         const order = await Order.findOne({ _id: orderId, userId: id })
-        res.json({ success: true, order: order })
+        const user = await User.findOne({ _id: id })
+        res.json({ success: true, order: order, user: { name: user.name, email: user.email } })
         return;
     }
     const orders = await Order.find({ userId: id }).sort("-date")
@@ -377,7 +432,37 @@ app.post("/api/getorders", async (req, res) => {
 })
 
 
+app.post("/api/update-order-status", async (req, res) => {
+    const { orderId, newStatus } = req.body;
 
-app.listen(PORT, '0.0.0.0', () => {
+    try {
+        // Update the order status in the database (e.g., using Mongoose)
+        const updatedOrder = await Order.findByIdAndUpdate(
+            orderId,
+            { orderStatus: newStatus },
+            { new: true }
+        );
+        console.log(updatedOrder.userId);
+
+        const u = await User.findOne({ "_id": updatedOrder.userId })
+        const sockets = emailSockets.get(u.email);
+        console.log(sockets.length);
+        if (sockets) {
+            sockets.forEach(socket => {
+                console.log(socket.id);
+                socket.emit('orders', { order: updatedOrder });
+            });
+        }
+        res.json({ success: true, order: updatedOrder });
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ success: false, message: 'Error updating order status' });
+    }
+});
+
+
+
+
+server.listen(PORT, '0.0.0.0', () => {
     console.log(`App listening on http://localhost:${PORT}`);
 })
