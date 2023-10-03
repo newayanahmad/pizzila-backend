@@ -443,7 +443,6 @@ app.post("/api/getorders", async (req, res) => {
 
 app.post("/api/update-order-status", async (req, res) => {
     const { orderId, newStatus } = req.body;
-
     try {
         // Update the order status in the database (e.g., using Mongoose)
         const updatedOrder = await Order.findByIdAndUpdate(
@@ -526,6 +525,17 @@ app.post('/api/custom-pizza', async (req, res) => {
         res.status(500).json({ error: 'Internal Server Error', success: false });
     }
 });
+
+app.post("/api/create-pizza", async (req, res) => {
+    const { token } = req.headers
+    const { pizza } = req.body
+    const id = jwt.decode(token, process.env.JWT_SECRET)
+    const user = await User.findOne({ "_id": id })
+    if (!user && !user.isAdmin) return res.json({ success: false })
+    const newPizza = await Pizza(pizza)
+    await newPizza.save()
+    res.json({ success: true })
+})
 
 
 server.listen(PORT, '0.0.0.0', () => {
