@@ -8,6 +8,7 @@ const User = require("./models/User")
 const Pizza = require("./models/Pizza")
 const Order = require("./models/Order")
 const Inventory = require("./models/Inventory")
+const CustomPizza = require("./models/CustomPizza")
 const mongoose = require('mongoose');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
@@ -285,6 +286,7 @@ app.post("/api/place-order", async (req, res) => {
     // storing the order details in order model
     const newOrder = new Order({ userId: id, items: cart, address: address, orderStatus: "Awaiting Payment", paymentStatus: "Pending", subtotal: subtotal })
     await newOrder.save()
+    io.emit("AdminOrders", { order: newOrder, isUpdate: false })
     res.json({ success: true, orderId: newOrder._id.toString() })
 })
 
@@ -319,7 +321,9 @@ app.post('/api/check-payment-status', async (req, res) => {
         const order = await Order.findOne({ "_id": orderID }); // Retrieve the order
         // Update the inventory
         if (!order.inventoryUpdated) {
-            const newOrder = await Order.updateOne({ "_id": orderID }, { "$set": { paymentStatus: "Paid", orderStatus: "Order Placed", inventoryUpdated: true } })
+            await Order.updateOne({ "_id": orderID }, { "$set": { paymentStatus: "Paid", orderStatus: "Order Placed", inventoryUpdated: true } })
+            const newOrder = await Order.findOne({ "_id": orderID })
+            io.emit("AdminOrders", { order: newOrder, isUpdate: true })
             order.items.forEach((item) => {
                 Object.keys(item.ingredients).forEach((key) => {
                     item.ingredients[key].forEach(async (ingredient) => {
@@ -327,11 +331,14 @@ app.post('/api/check-payment-status', async (req, res) => {
                     });
                 });
             });
+            const inventory = await Inventory.find({})
+            io.emit('inventory', { inventory })
         }
         res.json({ status: paymentIntent.status, success: true })
         // Send order confirmation email
         const u = await User.findOne({ "_id": id })
         await sendOrderConfirmation(u.email.toString(), order);
+
         const inventory = await Inventory.find({ quantity: { "$lte": 20 } })
         if (inventory.length > 0) {
             await notifyAdmin(inventory)
@@ -339,6 +346,8 @@ app.post('/api/check-payment-status', async (req, res) => {
     }
     else {
         await Order.updateOne({ "_id": orderID }, { "$set": { paymentStatus: "Failed" } })
+        const newOrder = await Order.findOne({ "_id": orderID })
+        io.emit("AdminOrders", { order: newOrder, isUpdate: true })
         res.json({ sucess: false })
         return
     }
@@ -461,6 +470,62 @@ app.post("/api/update-order-status", async (req, res) => {
 });
 
 
+// Define a POST route to handle custom pizza data
+app.post('/api/custom-pizza', async (req, res) => {
+    try {
+        // Check if the custom pizza with the same ingredients already exists
+        const existingPizza = await CustomPizza.findOne({
+            'ingredients.base': req.body.ingredients.base,
+            'ingredients.sauce': req.body.ingredients.sauce,
+            'ingredients.cheese': req.body.ingredients.cheese,
+            'ingredients.veggies': { $all: req.body.ingredients.veggies },
+        });
+
+        if (existingPizza) {
+            // If the same pizza already exists, return it
+            return res.status(200).json({ pizza: existingPizza, success: true });
+        }
+        const base = await Inventory.findOne({ ingredient: req.body.ingredients.base, category: "base" })
+        const basePrice = base.price
+        const sauce = await Inventory.findOne({ ingredient: req.body.ingredients.sauce, category: "sauce" })
+        const saucePrice = sauce.price
+        const cheese = await Inventory.findOne({ ingredient: req.body.ingredients.cheese, category: "cheese" })
+        const cheesePrice = cheese.price
+        const veggies = req.body.ingredients.veggies
+        let veggiesPrice = 0
+        veggies.forEach(async (veggie) => {
+            const veg = await Inventory.findOne({ ingredient: veggie, category: "veggies" })
+            veggiesPrice += veg.price
+        })
+        const price = basePrice + saucePrice + cheesePrice + veggiesPrice
+
+
+        // Convert base, sauce, and cheese strings into arrays
+        const baseArray = [req.body.ingredients.base];
+        const sauceArray = [req.body.ingredients.sauce];
+        const cheeseArray = [req.body.ingredients.cheese];
+
+        // Create a new custom pizza document with arrays
+        const newPizza = new CustomPizza({
+            price: price * 1.18,
+            ingredients: {
+                base: baseArray,
+                sauce: sauceArray,
+                cheese: cheeseArray,
+                veggies: req.body.ingredients.veggies || [], // Use existing veggies or an empty array
+            },
+        });
+
+        // Save the new pizza to the database
+        const savedPizza = await newPizza.save();
+
+        // Return the saved pizza as JSON
+        res.status(201).json({ pizza: savedPizza, success: true });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Internal Server Error', success: false });
+    }
+});
 
 
 server.listen(PORT, '0.0.0.0', () => {
