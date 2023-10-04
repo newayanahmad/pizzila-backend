@@ -49,7 +49,6 @@ io.on('connection', async (socket) => {
     const id = jwt.decode(userId, process.env.JWT_SECRET)
     const user = await User.findOne({ "_id": id })
     const email = user?.email.toString()
-    console.log("new user: ", email);
     // If the email is already in the map, push the new socket to the array
     // Otherwise, add a new array with the socket
     if (emailSockets.has(email)) {
@@ -57,10 +56,6 @@ io.on('connection', async (socket) => {
     } else {
         emailSockets.set(email, [socket]);
     }
-
-    socket.on("demo", data => {
-        console.log(data);
-    })
 
     socket.on('disconnect', async () => {
         // Remove the socket from the array
@@ -70,7 +65,6 @@ io.on('connection', async (socket) => {
         const email = user?.email.toString()
         const sockets = emailSockets.get(email);
         const index = sockets.indexOf(socket);
-        console.log(email, "disconnected");
         if (index !== -1) {
             sockets.splice(index, 1);
         }
@@ -450,14 +444,11 @@ app.post("/api/update-order-status", async (req, res) => {
             { orderStatus: newStatus },
             { new: true }
         );
-        console.log(updatedOrder.userId);
 
         const u = await User.findOne({ "_id": updatedOrder.userId })
         const sockets = emailSockets.get(u.email);
-        console.log(sockets.length);
         if (sockets) {
             sockets.forEach(socket => {
-                console.log(socket.id);
                 socket.emit('orders', { order: updatedOrder });
             });
         }
