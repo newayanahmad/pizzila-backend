@@ -537,6 +537,17 @@ app.post("/api/create-pizza", async (req, res) => {
     res.json({ success: true })
 })
 
+app.post("/api/remove-pizza", async (req, res) => {
+
+    const { token } = req.headers
+    const { pizzaID } = req.body
+    const id = jwt.decode(token, process.env.JWT_SECRET)
+    const user = await User.findOne({ "_id": id })
+    if (!user && !user.isAdmin) return res.json({ success: false })
+    await Pizza.deleteOne({ "_id": pizzaID })
+    res.json({ success: true })
+}
+)
 
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`App listening on http://localhost:${PORT}`);
