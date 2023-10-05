@@ -426,7 +426,7 @@ app.post("/api/getorders", async (req, res) => {
     }
     const id = jwt.decode(user, process.env.JWT_SECRET)
     const u = await User.findOne({ "_id": id })
-    if (!u.isAdmin) {
+    if (!u && !u.isAdmin) {
         res.json({ success: false })
         return;
     }
