@@ -349,9 +349,10 @@ app.post('/api/check-payment-status', async (req, res) => {
 
 app.post("/api/get-orders", async (req, res) => {
     const { user } = req.headers
+    console.log(user)
     if (!user) {
-        res.json({ success: false })
-        return;
+        return res.json({ success: false })
+
     }
     const { orderId } = req.body
     const id = jwt.decode(user, process.env.JWT_SECRET)
@@ -423,9 +424,10 @@ app.post("/api/getorders", async (req, res) => {
     if (!user) {
         res.json({ success: false })
         return;
-    }
+    } console.log(user)
     const id = jwt.decode(user, process.env.JWT_SECRET)
     const u = await User.findOne({ "_id": id })
+    console.log(u)
     if (!u && !u.isAdmin) {
         res.json({ success: false })
         return;
