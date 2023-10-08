@@ -9,7 +9,7 @@ const sendPasswordResetOTP = async (to, otp, username) => {
     });
 
     await transport.sendMail({
-        from: process.env.MAIL_USERNAME,
+        from: `Pizzila<${process.env.MAIL_USERNAME}>`,
         to: to,
         subject: "Password Reset",
         html: `<body style="font-family: Arial, sans-serif; margin: 0; padding: 0;">

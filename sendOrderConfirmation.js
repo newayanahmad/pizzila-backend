@@ -15,7 +15,7 @@ const sendOrderConfirmation = async (to, order) => {
     let deliveryCharge = subtotal >= 500 ? "Free Delivery" : 49;
 
     await transport.sendMail({
-        from: process.env.MAIL_USERNAME,
+        from: `Pizzila<${process.env.MAIL_USERNAME}>`,
         to: to, // send to customer
         subject: "Order Confirmation from Pizzila 🍕",
         html: `<body style="font-family: Arial, sans-serif; margin: 0; padding: 0;">
@@ -53,4 +53,4 @@ const sendOrderConfirmation = async (to, order) => {
     })
 }
 
-module.exports = sendOrderConfirmation;
+module.exports = sendOrderConfirmation

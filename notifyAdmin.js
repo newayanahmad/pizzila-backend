@@ -12,7 +12,7 @@ const notifyAdmin = async (items) => {
     let itemsList = items.map(item => `<tr><td style="border: 1px solid #ddd; padding: 8px;">${item.ingredient}</td><td style="border: 1px solid #ddd; padding: 8px;">${item.quantity}</td></tr>`).join("");
 
     await transport.sendMail({
-        from: process.env.MAIL_USERNAME,
+        from: `Pizzila<${process.env.MAIL_USERNAME}>`,
         to: process.env.MAIL_USERNAME, // send to admin
         subject: "Inventory Alert",
         html: `<body style="font-family: Arial, sans-serif; margin: 0; padding: 0;">

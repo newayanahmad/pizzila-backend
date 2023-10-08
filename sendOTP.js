@@ -9,7 +9,7 @@ const sendOTP = async (to, otp) => {
     });
 
     await transport.sendMail({
-        from: process.env.MAIL_USERNAME,
+        from: `Pizzila<${process.env.MAIL_USERNAME}>`,
         to: to,
         subject: "Email verification",
         html: `<body style="font-family: Arial, sans-serif; margin: 0; padding: 0;">
@@ -35,6 +35,4 @@ const sendOTP = async (to, otp) => {
     </body>`
     })
 }
-
-
 module.exports = sendOTP
